@@ -1,0 +1,47 @@
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Professors Collection
+    match /professors/{professorId} {
+      // Allow anyone to read professor profiles (adjust if only authenticated users should read)
+      allow read: if true;
+
+      // Allow ONLY authenticated users with the 'admin' custom claim to create, update, or delete professors
+      allow create, update, delete: if request.auth != null && request.auth.token.admin == true;
+
+        // Reviews Subcollection
+        match /reviews/{reviewId} {
+            // Allow authenticated users to create reviews
+            // We check the incoming data matches expected fields and types
+            allow create: if request.auth != null
+                            && request.resource.data.rating is number
+                            && request.resource.data.rating >= 1 && request.resource.data.rating <= 5
+                            && request.resource.data.comment is string
+                            && request.resource.data.comment.size() >= 10 && request.resource.data.comment.size() <= 1000
+                            && request.resource.data.studentName is string
+                            && request.resource.data.studentName.size() <= 50 // Includes empty string for Anonymous
+                            && request.resource.data.createdAt == request.time // Ensure server timestamp is used
+                            && (!('sentiment' in request.resource.data) // Don't allow client to set sentiment directly
+                                || request.resource.data.sentiment is string); // Or allow if string (less strict)
+
+
+            // Allow anyone to read reviews (adjust if needed)
+            allow read: if true;
+
+            // Allow ONLY authenticated admins to delete reviews
+            allow delete: if request.auth != null && request.auth.token.admin == true;
+
+            // Disallow updating reviews for now (can be added if needed)
+            allow update: if false;
+        }
+    }
+
+    // Default deny all other access
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
